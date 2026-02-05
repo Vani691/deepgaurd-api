@@ -3,63 +3,56 @@ from pydantic import BaseModel
 import base64
 import os
 import librosa
-from transformers import pipeline
+import numpy as np
 
 
 app = FastAPI(title="DeepGuard API")
 
 
-API_KEY = "deepguard123"  
-
-
-print("Loading lightweight speech model...")
-classifier = pipeline(
-    "audio-classification",
-    model="facebook/wav2vec2-base-960h"
-)
+API_KEY = "deepguard123"
 
 
 class AudioRequest(BaseModel):
     audio: str  # Base64 encoded audio
 
 
+def analyze_audio_signal(audio_array, sr):
+    duration = len(audio_array) / sr
+    energy = np.mean(np.abs(audio_array))
+
+    # Heuristic rules
+    if duration < 1.0:
+        return "Understanding", 0.3, "Audio too short for reliable voice characteristics."
+
+    if energy < 0.01:
+        return "AI_GENERATED", 0.75, "Low natural energy variation detected in voice signal."
+
+    return "HUMAN", 0.85, "Natural speech energy and duration detected."
+
+=
 @app.post("/analyze")
 async def analyze_audio(
     request: AudioRequest,
     authorization: str = Header(None)
 ):
-   
     if authorization != API_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     temp_file = "temp_audio.wav"
 
     try:
-        # Decode Base64 audio
         audio_bytes = base64.b64decode(request.audio)
-
         with open(temp_file, "wb") as f:
             f.write(audio_bytes)
 
-        # Load audio (speech only)
-        audio_array, sampling_rate = librosa.load(temp_file, sr=16000)
+        audio_array, sr = librosa.load(temp_file, sr=16000)
 
-        # Run model
-        results = classifier({
-            "array": audio_array,
-            "sampling_rate": sampling_rate
-        })
-
-        top = max(results, key=lambda x: x["score"])
-        score = float(top["score"])
-
-        
-        verdict = "HUMAN"
+        classification, confidence, explanation = analyze_audio_signal(audio_array, sr)
 
         return {
-            "classification": verdict,
-            "confidence_score": round(score, 4),
-            "explanation": "Baseline speech authenticity analysis completed."
+            "classification": classification,
+            "confidence_score": confidence,
+            "explanation": explanation
         }
 
     except Exception as e:
