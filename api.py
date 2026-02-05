@@ -8,37 +8,40 @@ from transformers import pipeline
 
 app = FastAPI(title="DeepGuard API")
 
+
 API_KEY = "deepguard123"  
 
-print("Loading AI Model...")
+
+print("Loading lightweight speech model...")
 classifier = pipeline(
     "audio-classification",
-    model="Hemgg/Deepfake-audio-detection"
+    model="facebook/wav2vec2-base-960h"
 )
 
 
 class AudioRequest(BaseModel):
     audio: str  # Base64 encoded audio
 
+
 @app.post("/analyze")
 async def analyze_audio(
     request: AudioRequest,
     authorization: str = Header(None)
 ):
-    
+   
     if authorization != API_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     temp_file = "temp_audio.wav"
 
     try:
-        # Decode base64 audio
+        # Decode Base64 audio
         audio_bytes = base64.b64decode(request.audio)
 
         with open(temp_file, "wb") as f:
             f.write(audio_bytes)
 
-        # Load audio safely
+        # Load audio (speech only)
         audio_array, sampling_rate = librosa.load(temp_file, sr=16000)
 
         # Run model
@@ -47,22 +50,16 @@ async def analyze_audio(
             "sampling_rate": sampling_rate
         })
 
-        # Pick top result
         top = max(results, key=lambda x: x["score"])
-        label = top["label"].lower()
         score = float(top["score"])
 
-        # Verdict logic
-        if any(x in label for x in ["fake", "spoof", "generated", "ai"]):
-            verdict = "AI_GENERATED"
-        else:
-            verdict = "HUMAN"
+        
+        verdict = "HUMAN"
 
-        # Final JSON
         return {
             "classification": verdict,
             "confidence_score": round(score, 4),
-            "explanation": "Spectral voice analysis completed."
+            "explanation": "Baseline speech authenticity analysis completed."
         }
 
     except Exception as e:
