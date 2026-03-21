@@ -21,5 +21,5 @@ Base64-encoded speech audio (mp3/wav)
 Designed for speech audio (calls, voice notes).
 
 ## Developer
-team VigilAI
-CSE-AIML Students
+Shravani Mane
+CSE-AIML Student
